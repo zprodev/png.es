@@ -1,18 +1,29 @@
+import resolve from 'rollup-plugin-node-resolve';
+
+const output = [];
+const plugins = [];
+if(process.env.BROWSER){
+  output.push({
+    file: 'dist/browser/png.js',
+    format: 'iife',
+    name: 'pnges'
+  });
+  plugins.push(
+    resolve()
+  );
+}else{
+  output.push({
+    file: 'dist/cjs/png.js',
+    format: 'cjs',
+  });
+  output.push({
+    file: 'dist/esm/png.mjs',
+    format: 'es',
+  });
+}
+
 export default {
   input: 'dist/tsc/png.js',
-  output: [
-    {
-      file: 'dist/browser/png.js',
-      format: 'iife',
-      name: 'pnges'
-    },
-    {
-      file: 'dist/cjs/png.js',
-      format: 'cjs',
-    },
-    {
-      file: 'dist/esm/png.mjs',
-      format: 'es',
-    }
-  ]
+  output: output,
+  plugins: plugins
 };
