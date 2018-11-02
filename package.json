@@ -1,7 +1,7 @@
 {
   "name": "png.es",
   "version": "0.0.1",
-  "description": "",
+  "description": "ECMAScript compliant lightweight PNG editor",
   "main": "dist/cjs/png.js",
   "module": "dist/esm/png.mjs",
   "types": "dist/tsc/png.d.ts",
@@ -35,5 +35,14 @@
   "bugs": {
     "url": "https://github.com/zprodev/png.es/issues"
   },
+  "files": [
+    "README.md",
+    "dist"
+  ],
+  "keywords": [
+    "png",
+    "binary",
+    "editor"
+  ],
   "homepage": "https://github.com/zprodev/png.es#readme"
 }
