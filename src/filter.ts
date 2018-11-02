@@ -19,16 +19,15 @@ export function inflateFilter(
   let left = 0;
   let up = 0;
   let upleft = 0;
-  const lineLength = width * pixelByte;
   for (let i = 0; i < height; i++) {
     const filterType = readUint8(data, dataIndex);
     dataIndex++;
     if (FILTER_TYPE.NONE === filterType) {
-      for (let j = 0; j < lineLength; j++) {
+      for (let j = 0; j < lineByte; j++) {
         pixelData[pixelDataIndex + j] = data[dataIndex + j];
       }
     } else if (FILTER_TYPE.SUB === filterType) {
-      for (let j = 0; j < lineLength; j++) {
+      for (let j = 0; j < lineByte; j++) {
         if (j < pixelByte) {
           pixelData[pixelDataIndex + j] = data[dataIndex + j];
         } else {
@@ -36,7 +35,7 @@ export function inflateFilter(
         }
       }
     } else if (FILTER_TYPE.UP === filterType) {
-      for (let j = 0; j < lineLength; j++) {
+      for (let j = 0; j < lineByte; j++) {
         if (pixelDataIndex < lineByte) {
           pixelData[pixelDataIndex + j] = data[dataIndex + j];
         } else {
@@ -44,7 +43,7 @@ export function inflateFilter(
         }
       }
     } else if (FILTER_TYPE.AVERAGE === filterType) {
-      for (let j = 0; j < lineLength; j++) {
+      for (let j = 0; j < lineByte; j++) {
         left = up = 0;
         if (j >= pixelByte) {
           left = pixelData[pixelDataIndex + j - pixelByte];
@@ -55,7 +54,7 @@ export function inflateFilter(
         pixelData[pixelDataIndex + j] = ((left + up) / 2 + data[dataIndex + j]) % 256;
       }
     } else if (FILTER_TYPE.PAETH === filterType) {
-      for (let j = 0; j < lineLength; j++) {
+      for (let j = 0; j < lineByte; j++) {
         left = up = upleft = 0;
         if (j >= pixelByte && pixelDataIndex >= lineByte) {
           left = pixelData[pixelDataIndex + j - pixelByte];
@@ -71,8 +70,8 @@ export function inflateFilter(
     } else {
       throw new Error('Unknown filter');
     }
-    dataIndex += lineLength;
-    pixelDataIndex += lineLength;
+    dataIndex += lineByte;
+    pixelDataIndex += lineByte;
   }
   return pixelData;
 }
@@ -89,11 +88,82 @@ export function deflateFilter(
   const data = new Uint8Array(width * height * pixelByte + height);
   let dataIndex = 0;
   let rawDataIndex = 0;
+  let left = 0;
+  let up = 0;
+  let upleft = 0;
+
   for (let i = 0; i < height; i++) {
-    // TODO:filtering
+    let filterType = FILTER_TYPE.NONE;
+    let filterExpectedValue = calcExpectedValueNone(rawData, rawDataIndex, lineByte);
+    let nextFilterExpectedValue = calcExpectedValueSub(rawData, rawDataIndex, lineByte);
+    if (filterExpectedValue > nextFilterExpectedValue) {
+      filterExpectedValue = nextFilterExpectedValue;
+      filterType = FILTER_TYPE.SUB;
+    }
+    nextFilterExpectedValue = calcExpectedValueUp(rawData, rawDataIndex, lineByte);
+    if (filterExpectedValue > nextFilterExpectedValue) {
+      filterExpectedValue = nextFilterExpectedValue;
+      filterType = FILTER_TYPE.UP;
+    }
+    nextFilterExpectedValue = calcExpectedValueAverage(rawData, rawDataIndex, lineByte, pixelByte);
+    if (filterExpectedValue > nextFilterExpectedValue) {
+      filterExpectedValue = nextFilterExpectedValue;
+      filterType = FILTER_TYPE.AVERAGE;
+    }
+    nextFilterExpectedValue = calcExpectedValuePaeth(rawData, rawDataIndex, lineByte, pixelByte);
+    if (filterExpectedValue > nextFilterExpectedValue) {
+      filterExpectedValue = nextFilterExpectedValue;
+      filterType = FILTER_TYPE.PAETH;
+    }
+
+    data[dataIndex] = filterType;
     dataIndex++;
-    for (let j = 0; j < lineByte; j++) {
-      data[dataIndex + j] = rawData[rawDataIndex + j];
+    if (FILTER_TYPE.NONE === filterType) {
+      for (let j = 0; j < lineByte; j++) {
+        data[dataIndex + j] = rawData[rawDataIndex + j];
+      }
+    } else if (FILTER_TYPE.SUB === filterType) {
+      for (let j = 0; j < lineByte; j++) {
+        if (j < pixelByte) {
+          data[dataIndex + j] = rawData[rawDataIndex + j];
+        } else {
+          data[dataIndex + j] = rawData[rawDataIndex + j] - rawData[rawDataIndex + j - pixelByte];
+        }
+      }
+    } else if (FILTER_TYPE.UP === filterType) {
+      for (let j = 0; j < lineByte; j++) {
+        if (dataIndex < lineByte) {
+          data[dataIndex + j] = rawData[rawDataIndex + j];
+        } else {
+          data[dataIndex + j] = rawData[rawDataIndex + j] - rawData[rawDataIndex + j - lineByte];
+        }
+      }
+
+    } else if (FILTER_TYPE.AVERAGE === filterType) {
+      for (let j = 0; j < lineByte; j++) {
+        left = up = 0;
+        if (j >= pixelByte) {
+          left = rawData[rawDataIndex + j - pixelByte];
+        }
+        if (rawDataIndex >= lineByte) {
+          up = rawData[rawDataIndex + j - lineByte];
+        }
+        data[dataIndex + j] = rawData[rawDataIndex + j] - (((left + up) / 2) | 0);
+      }
+    } else if (FILTER_TYPE.PAETH === filterType) {
+      for (let j = 0; j < lineByte; j++) {
+        left = up = upleft = 0;
+        if (j >= pixelByte && rawDataIndex >= lineByte) {
+          left = rawData[rawDataIndex + j - pixelByte];
+          up = rawData[rawDataIndex + j - lineByte];
+          upleft = rawData[rawDataIndex + j - lineByte - pixelByte];
+        } else if (j >= pixelByte) {
+          left = rawData[rawDataIndex + j - pixelByte];
+        } else if (rawDataIndex >= lineByte) {
+          up = rawData[rawDataIndex + j - lineByte];
+        }
+        data[dataIndex + j] = rawData[rawDataIndex + j] - calcPaeth(left, up, upleft);
+      }
     }
     dataIndex += lineByte;
     rawDataIndex += lineByte;
@@ -135,4 +205,96 @@ function calcPaeth(left: number, up: number, upleft: number) {
     }
 
     return upleft;
+}
+
+function calcExpectedValueNone(input: Uint8Array, offset: number, length: number) {
+  let expectedValue = 0;
+  for (let i = offset, iMax = offset + length; i < iMax; i++) {
+    expectedValue += input[i];
+  }
+  return expectedValue;
+}
+
+function calcExpectedValueSub(input: Uint8Array, offset: number, length: number) {
+  let expectedValue = 0;
+  let tmpValue = 0;
+  for (let i = offset, iMax = offset + length; i < iMax; i++) {
+    if (i < length) {
+      expectedValue += input[i];
+    } else {
+      tmpValue = input[i] - input[i - length];
+      if (0 <= tmpValue) {
+        expectedValue += tmpValue;
+      } else {
+        expectedValue += (tmpValue +  256);
+      }
+    }
+  }
+  return expectedValue;
+}
+
+function calcExpectedValueUp(input: Uint8Array, offset: number, length: number) {
+  let expectedValue = 0;
+  let tmpValue = 0;
+  for (let i = offset, iMax = offset + length; i < iMax; i++) {
+    if (i < length) {
+      expectedValue += input[i];
+    } else {
+      tmpValue = input[i] - input[i - length];
+      if (0 <= tmpValue) {
+        expectedValue += tmpValue;
+      } else {
+        expectedValue += (tmpValue +  256);
+      }
+    }
+  }
+  return expectedValue;
+}
+function calcExpectedValueAverage(input: Uint8Array, offset: number, length: number, pixelByte: number) {
+  let expectedValue = 0;
+  let tmpValue = 0;
+  let left = 0;
+  let up = 0;
+  for (let i = offset, iMax = offset + length; i < iMax; i++) {
+    left = up = 0;
+    if (i >= pixelByte) {
+      left = input[i - pixelByte];
+    }
+    if (i >= length) {
+      up = input[i - length];
+    }
+    tmpValue = input[i] - (((left + up) / 2) | 0);
+    if (0 <= tmpValue) {
+      expectedValue += tmpValue;
+    } else {
+      expectedValue += (tmpValue +  256);
+    }
+  }
+  return expectedValue;
+}
+function calcExpectedValuePaeth(input: Uint8Array, offset: number, length: number, pixelByte: number) {
+  let expectedValue = 0;
+  let tmpValue = 0;
+  let left = 0;
+  let up = 0;
+  let upleft = 0;
+  for (let i = offset, iMax = offset + length; i < iMax; i++) {
+    left = up = upleft = 0;
+    if (i >= pixelByte && offset >= length) {
+      left = input[i - pixelByte];
+      up = input[i - length];
+      upleft = input[i - length - pixelByte];
+    } else if (i >= pixelByte) {
+      left = input[i - pixelByte];
+    } else if (i >= length) {
+      up = input[i - length];
+    }
+    tmpValue = input[i] - calcPaeth(left, up, upleft);
+    if (0 <= tmpValue) {
+      expectedValue += tmpValue;
+    } else {
+      expectedValue += (tmpValue +  256);
+    }
+  }
+  return expectedValue;
 }
