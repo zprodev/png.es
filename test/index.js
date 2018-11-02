@@ -18,3 +18,12 @@ describe('parse', function() {
     );
   });
 });
+
+describe('pack', function() {
+  it('RGBA', function() {
+    const buffe = fs.readFileSync(path.join(__dirname, 'png', 'rgba.png'));
+    const png = pnges.parse(buffe);
+    pnges.pack(png);
+    assert.ok(true);
+  });
+});
