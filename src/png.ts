@@ -83,7 +83,7 @@ export class PNG {
   }
 }
 
-export function parse(input: Uint8Array) {
+export function parse(input: Uint8Array, oprion?: {inflate?: (data: Uint8Array) => Uint8Array} ) {
   const chunks = parseChunk(input);
   const ihdr = chunks.get('IHDR') as Chunk;
   const width = readUInt32BE(ihdr.data, 0);
@@ -105,7 +105,7 @@ export function parse(input: Uint8Array) {
   }
 
   const idat = chunks.get('IDAT') as Chunk;
-  const rawData = inflate(idat.data);
+  const rawData = (oprion && oprion.inflate) ? oprion.inflate(idat.data) : inflate(idat.data);
   const pixelData = inflateFilter(rawData, width, height, bitDepth, colorType);
 
   const png = new PNG(width, height, colorType, bitDepth);
@@ -114,7 +114,7 @@ export function parse(input: Uint8Array) {
   return png;
 }
 
-export function pack(png: PNG) {
+export function pack(png: PNG, oprion?: {deflate?: (data: Uint8Array) => Uint8Array}) {
   const chunks = new Map<string, Chunk>();
 
   const ihdrData = new Uint8Array(13);
@@ -132,7 +132,7 @@ export function pack(png: PNG) {
 
   const filterData = deflateFilter(png.data, png.width, png.height, png.bitDepth, png.colorType);
 
-  const idatData = deflate(filterData);
+  const idatData = (oprion && oprion.deflate) ? oprion.deflate(filterData) : deflate(filterData);
   chunks.set('IDAT', {
     type: 'IDAT',
     data: idatData,
