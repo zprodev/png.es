@@ -17,7 +17,7 @@ if(process.env.BROWSER){
     format: 'cjs',
   });
   output.push({
-    file: 'dist/esm/png.mjs',
+    file: 'dist/esm/png.js',
     format: 'es',
   });
 }
