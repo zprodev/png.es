@@ -1,6 +1,7 @@
 # png.es
 
-[![Build Status](https://travis-ci.org/zprodev/png.es.svg?branch=master)](https://travis-ci.org/zprodev/zlib.es)
+[![Build Status](https://travis-ci.org/zprodev/png.es.svg?branch=master)](https://travis-ci.org/zprodev/png.es)
+[![npm](https://img.shields.io/npm/v/png.es.svg)](https://www.npmjs.com/package/png.es)
 [![license](https://img.shields.io/github/license/zprodev/png.es.svg)](LICENSE)
 
 ECMAScript compliant lightweight PNG editor
