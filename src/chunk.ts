@@ -43,16 +43,16 @@ export function packChunk(chunks: Map<string, Chunk>) {
   const packData = new Uint8Array(length);
   let packDataIndex = 0;
 
-  copy(SIGNATURE, packData, packDataIndex);
+  copy(SIGNATURE, 0, packData, packDataIndex, SIGNATURE.length);
   packDataIndex += SIGNATURE.length;
 
   chunks.forEach((chunk) => {
     writeUInt32BE(chunk.data.length, packData, packDataIndex);
     packDataIndex += 4;
     const array = convertCodes(chunk.type);
-    copy(array, packData, packDataIndex);
+    copy(array, 0, packData, packDataIndex, array.length);
     packDataIndex += 4;
-    copy(chunk.data, packData, packDataIndex);
+    copy(chunk.data, 0, packData, packDataIndex, chunk.data.length);
     packDataIndex += chunk.data.length;
     const crc = calcCrc32(packData, packDataIndex - 4 - chunk.data.length, packDataIndex);
     writeUInt32BE(crc, packData, packDataIndex);

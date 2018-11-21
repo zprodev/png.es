@@ -19,7 +19,7 @@
   "scripts": {
     "test": "mocha ./test/index.js",
     "build": "npm run lint && npm run build:tsc && npm run build:rollup:module && npm run build:rollup:browser && npm run build:uglify && npm run test",
-    "debug": "npm run build:tsc && npm run build:rollup:module && npm run test",
+    "dev": "npm run build:tsc && npm run build:rollup:module && npm run test",
     "build:tsc": "tsc",
     "build:rollup:module": "rollup -c",
     "build:rollup:browser": "rollup -c --environment BROWSER",

@@ -6,6 +6,13 @@
 
 ECMAScript compliant lightweight PNG editor
 
+## Support
+
+|Function|BitDepth|TrueColor|GrayScale|Alpha|IndexedColor|Interlace|
+|---|---|---|---|---|---|---|---|
+|parse|1, 4, 6, 8|o|o|o|o|x|
+|pack|1, 4, 6, 8|o|o|o|x|x|
+
 ## Distribution
 
 ### npm
@@ -35,7 +42,21 @@ const pngObject = parse(rawData); // Input type is Uint8Array
 ### pack
 
 ```
-import { pack } from 'png.es';
+import { PNG, pack, COLOR_TYPE } from 'png.es';
 
-const rawData = pack(pngObject);
+// 4px * 4px RGBA image
+const pngObject = new PNG(4, 4, COLOR_TYPE.RGBA);
+pngObject.setData([255, 255, ....]);
+
+const uint8Array = pack(pngObject);
+```
+
+### edit
+
+```
+import { parse, pack } from 'png.es';
+
+const pngObject = parse(rawData);
+pngObject.setPixel(2, 2, [255, 0, 0, 255] ); // Set red to x2y2
+const uint8Array = pack(pngObject);
 ```

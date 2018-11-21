@@ -1,14 +1,10 @@
 import {deflate, inflate} from 'zlib.es';
 import {Chunk, packChunk, parseChunk} from './chunk';
-import {calcPixelByte, deflateFilter, inflateFilter} from './filter';
+import {COLOR_TYPE} from './const';
+import {calcPixelByte, calcPixelPropsLen, deflateFilter, inflateFilter} from './filter';
 import {readUInt32BE, readUint8, writeUInt32BE, writeUInt8} from './utils/Uint8ArrayUtil';
 
-export interface RGBA {
-  r?: number;
-  g?: number;
-  b?: number;
-  a?: number;
-}
+export {COLOR_TYPE} from './const';
 
 export class PNG {
   private _data: Uint8Array;
@@ -20,11 +16,19 @@ export class PNG {
 //  public filterMethod = 0;
 //  public interlaceMethod = 0;
 
+  private _pixelPropsNum = 0;
+
   constructor(width: number, height: number, colorType: number = 6, bitDepth: number = 8) {
+    // TODO: Add support IndexedColor
+    if (colorType === COLOR_TYPE.INDEX) {
+      throw new Error('Not support IndexedColor');
+    }
+
     this._width = width;
     this._height = height;
     this._colorType = colorType;
     this._bitDepth = bitDepth;
+    this._pixelPropsNum = calcPixelPropsLen(colorType);
     const pixelByte = calcPixelByte(colorType, bitDepth);
     this._data = new Uint8Array(width * height * pixelByte);
   }
@@ -55,30 +59,23 @@ export class PNG {
     }
   }
 
-  public getPixel(x: number, y: number): RGBA {
-    const index = (x + this._width * y) * 4;
+  public getPixel(x: number, y: number): number[] {
+    const pixelData: number[] = [];
+    const index = ((x - 1) + this._width * (y - 1)) * this._pixelPropsNum;
     const data = this._data;
-    return {
-      r: data[index],
-      g: data[index + 1],
-      b: data[index + 2],
-      a: data[index + 3],
-    };
+    for (let i = index, iEnd = index + this._pixelPropsNum; i < iEnd; i++) {
+      pixelData.push(data[i]);
+    }
+    return pixelData;
   }
-  public setPixel(x: number, y: number, rgba: RGBA) {
-    const index = (x + this._width * y) * 4;
+  public setPixel(x: number, y: number, pixelData: number[]) {
+    if (pixelData.length !== this._pixelPropsNum) {
+      throw new Error('Don\'t match pixelData size');
+    }
+    const index = ((x - 1) + this._width * (y - 1)) * this._pixelPropsNum;
     const data = this._data;
-    if (rgba.r !== undefined) {
-      data[index] = rgba.r;
-    }
-    if (rgba.g !== undefined) {
-      data[index + 1] = rgba.g;
-    }
-    if (rgba.b !== undefined) {
-      data[index + 2] = rgba.b;
-    }
-    if (rgba.a !== undefined) {
-      data[index + 3] = rgba.a;
+    for (let i = 0; i < this._pixelPropsNum; i++) {
+      data[i + index] = pixelData[i];
     }
   }
 }
@@ -105,13 +102,21 @@ export function parse(input: Uint8Array, oprion?: {inflate?: (data: Uint8Array) 
   }
 
   const idat = chunks.get('IDAT') as Chunk;
+  const palette =  (chunks.has('PLTE')) ? (chunks.get('PLTE') as Chunk).data : undefined;
+  const transparency =  (chunks.has('tRNS')) ? (chunks.get('tRNS') as Chunk).data : undefined;
   const rawData = (oprion && oprion.inflate) ? oprion.inflate(idat.data) : inflate(idat.data);
-  const pixelData = inflateFilter(rawData, width, height, bitDepth, colorType);
+  const pixelData = inflateFilter(rawData, width, height, bitDepth, colorType, palette, transparency);
 
-  const png = new PNG(width, height, colorType, bitDepth);
-  png.setData(pixelData);
-
-  return png;
+  // TODO: Add support IndexedColor
+  if (colorType === COLOR_TYPE.INDEX) {
+    const png = new PNG(width, height);
+    png.setData(pixelData);
+    return png;
+  } else {
+    const png = new PNG(width, height, colorType, bitDepth);
+    png.setData(pixelData);
+    return png;
+  }
 }
 
 export function pack(png: PNG, oprion?: {deflate?: (data: Uint8Array) => Uint8Array}) {
