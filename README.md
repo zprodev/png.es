@@ -9,7 +9,7 @@ ECMAScript compliant lightweight PNG editor
 ## Support
 
 |Function|BitDepth|TrueColor|GrayScale|Alpha|IndexedColor|Interlace|
-|---|---|---|---|---|---|---|---|
+|:--|:--|:-:|:-:|:-:|:-:|:-:|
 |parse|1, 4, 6, 8|o|o|o|o|x|
 |pack|1, 4, 6, 8|o|o|o|x|x|
 
