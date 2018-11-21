@@ -1,6 +1,6 @@
 {
   "name": "png.es",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "ECMAScript compliant lightweight PNG editor",
   "main": "dist/cjs/png.js",
   "module": "dist/esm/png.js",
