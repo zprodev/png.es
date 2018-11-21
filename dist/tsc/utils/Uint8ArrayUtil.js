@@ -8,10 +8,9 @@ export function startsWith(base, target, baseIndex = 0) {
     }
     return true;
 }
-export function copy(base, target, targetOffset = 0) {
-    const baseLength = base.length;
-    for (let i = 0; i < baseLength; i++) {
-        target[targetOffset + i] = base[i];
+export function copy(base, baseOffset, target, targetOffset, length) {
+    for (let i = 0; i < length; i++) {
+        target[targetOffset + i] = base[baseOffset + i];
     }
 }
 export function readString(target, offset, length) {
@@ -44,4 +43,11 @@ export function writeUInt32BE(value, target, offset) {
     target[offset + 1] = (value >>> 16);
     target[offset + 2] = (value >>> 8);
     target[offset + 3] = (value & 0xff);
+}
+export function readBits(target, offset, length) {
+    const byteOffset = (offset / 8) | 0;
+    const bitOffset = offset % 8;
+    const bitOffsetFilter = 255 & (255 >>> bitOffset);
+    // MEMO: length never crosses a byte boundary
+    return (target[byteOffset] & bitOffsetFilter) >>> (8 - bitOffset - length);
 }

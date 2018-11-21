@@ -1,81 +1,103 @@
-import { FILTER_TYPE } from './const';
-import { readUint8 } from './utils/Uint8ArrayUtil';
-export function inflateFilter(data, width, height, bitDepth, colorType) {
-    if (bitDepth !== 8) {
-        throw new Error('Only bit depth 8 is supported');
-    }
-    const pixelByte = calcPixelByte(colorType, bitDepth);
-    const lineByte = pixelByte * width;
-    const pixelData = new Uint8Array(width * height * pixelByte);
+import { COLOR_TYPE, FILTER_TYPE } from './const';
+import { copy, readBits } from './utils/Uint8ArrayUtil';
+export function inflateFilter(data, width, height, bitDepth, colorType, palette, transparency) {
+    const pixelPropsNum = calcPixelPropsLen(colorType);
+    const linePropsNum = pixelPropsNum * width;
+    const pixelBitLen = pixelPropsNum * bitDepth;
+    const lineBitLen = pixelBitLen * width;
+    const resultPixelByte = calcPixelByte(colorType, bitDepth);
+    const resultLineByte = resultPixelByte * width;
+    const result = new Uint8Array(width * height * resultPixelByte);
     let dataIndex = 0;
-    let pixelDataIndex = 0;
+    let resultIndex = 0;
     let left = 0;
     let up = 0;
     let upleft = 0;
-    for (let i = 0; i < height; i++) {
-        const filterType = readUint8(data, dataIndex);
-        dataIndex++;
+    for (let y = 0; y < height; ++y) {
+        const filterType = readBits(data, dataIndex, 8);
+        dataIndex = dataIndex + 8;
         if (FILTER_TYPE.NONE === filterType) {
-            for (let j = 0; j < lineByte; j++) {
-                pixelData[pixelDataIndex + j] = data[dataIndex + j];
+            for (let x = 0; x < linePropsNum; ++x) {
+                const value = readBits(data, dataIndex + x * bitDepth, bitDepth);
+                // TODO: 効率化
+                if (palette !== undefined && colorType === COLOR_TYPE.INDEX) {
+                    copy(palette, value * 3, result, resultIndex + x * 4, 3);
+                    if (transparency !== undefined && transparency[value] !== undefined) {
+                        result[resultIndex + x * 4 + 3] = transparency[value];
+                    }
+                    else {
+                        result[resultIndex + x * 4 + 3] = 255;
+                    }
+                }
+                else {
+                    result[resultIndex + x] = value;
+                }
             }
         }
         else if (FILTER_TYPE.SUB === filterType) {
-            for (let j = 0; j < lineByte; j++) {
-                if (j < pixelByte) {
-                    pixelData[pixelDataIndex + j] = data[dataIndex + j];
+            for (let x = 0; x < linePropsNum; ++x) {
+                if (x < pixelPropsNum) {
+                    result[resultIndex + x] = readBits(data, dataIndex + x * bitDepth, bitDepth);
                 }
                 else {
-                    pixelData[pixelDataIndex + j] = (pixelData[pixelDataIndex + j - pixelByte] + data[dataIndex + j]) % 256;
+                    result[resultIndex + x] =
+                        (result[resultIndex + x - pixelPropsNum] + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
                 }
             }
         }
         else if (FILTER_TYPE.UP === filterType) {
-            for (let j = 0; j < lineByte; j++) {
-                if (pixelDataIndex < lineByte) {
-                    pixelData[pixelDataIndex + j] = data[dataIndex + j];
+            for (let x = 0; x < linePropsNum; x++) {
+                if (resultIndex < linePropsNum) {
+                    result[resultIndex + x] = readBits(data, dataIndex + x * bitDepth, bitDepth);
                 }
                 else {
-                    pixelData[pixelDataIndex + j] = (pixelData[pixelDataIndex + j - lineByte] + data[dataIndex + j]) % 256;
+                    result[resultIndex + x] =
+                        (result[resultIndex + x - linePropsNum] + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
                 }
             }
         }
         else if (FILTER_TYPE.AVERAGE === filterType) {
-            for (let j = 0; j < lineByte; j++) {
+            for (let x = 0; x < linePropsNum; x++) {
                 left = up = 0;
-                if (j >= pixelByte) {
-                    left = pixelData[pixelDataIndex + j - pixelByte];
+                if (x >= pixelPropsNum) {
+                    left = result[resultIndex + x - pixelPropsNum];
                 }
-                if (pixelDataIndex >= lineByte) {
-                    up = pixelData[pixelDataIndex + j - lineByte];
+                if (resultIndex >= linePropsNum) {
+                    up = result[resultIndex + x - linePropsNum];
                 }
-                pixelData[pixelDataIndex + j] = ((left + up) / 2 + data[dataIndex + j]) % 256;
+                result[resultIndex + x] = ((left + up) / 2 + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
             }
         }
         else if (FILTER_TYPE.PAETH === filterType) {
-            for (let j = 0; j < lineByte; j++) {
+            for (let x = 0; x < linePropsNum; x++) {
                 left = up = upleft = 0;
-                if (j >= pixelByte && pixelDataIndex >= lineByte) {
-                    left = pixelData[pixelDataIndex + j - pixelByte];
-                    up = pixelData[pixelDataIndex + j - lineByte];
-                    upleft = pixelData[pixelDataIndex + j - lineByte - pixelByte];
+                if (x >= pixelPropsNum && resultIndex >= linePropsNum) {
+                    left = result[resultIndex + x - pixelPropsNum];
+                    up = result[resultIndex + x - linePropsNum];
+                    upleft = result[resultIndex + x - pixelPropsNum - linePropsNum];
                 }
-                else if (j >= pixelByte) {
-                    left = pixelData[pixelDataIndex + j - pixelByte];
+                else if (x >= pixelPropsNum) {
+                    left = result[resultIndex + x - pixelPropsNum];
                 }
-                else if (pixelDataIndex >= lineByte) {
-                    up = pixelData[pixelDataIndex + j - lineByte];
+                else if (resultIndex >= linePropsNum) {
+                    up = result[resultIndex + x - linePropsNum];
                 }
-                pixelData[pixelDataIndex + j] = (calcPaeth(left, up, upleft) + data[dataIndex + j]) % 256;
+                result[resultIndex + x] =
+                    (calcPaeth(left, up, upleft) + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
             }
         }
         else {
             throw new Error('Unknown filter');
         }
-        dataIndex += lineByte;
-        pixelDataIndex += lineByte;
+        if (lineBitLen % 8 === 0) {
+            dataIndex += lineBitLen;
+        }
+        else {
+            dataIndex += lineBitLen + (8 - lineBitLen % 8);
+        }
+        resultIndex += resultLineByte;
     }
-    return pixelData;
+    return result;
 }
 export function deflateFilter(rawData, width, height, bitDepth, colorType) {
     const pixelByte = calcPixelByte(colorType, bitDepth);
@@ -142,7 +164,7 @@ export function deflateFilter(rawData, width, height, bitDepth, colorType) {
                 if (j >= pixelByte) {
                     left = rawData[rawDataIndex + j - pixelByte];
                 }
-                if (rawDataIndex >= lineByte) {
+                if (dataIndex >= lineByte) {
                     up = rawData[rawDataIndex + j - lineByte];
                 }
                 data[dataIndex + j] = rawData[rawDataIndex + j] - (((left + up) / 2) | 0);
@@ -151,15 +173,15 @@ export function deflateFilter(rawData, width, height, bitDepth, colorType) {
         else if (FILTER_TYPE.PAETH === filterType) {
             for (let j = 0; j < lineByte; j++) {
                 left = up = upleft = 0;
-                if (j >= pixelByte && rawDataIndex >= lineByte) {
+                if (j >= pixelByte && dataIndex >= lineByte) {
                     left = rawData[rawDataIndex + j - pixelByte];
                     up = rawData[rawDataIndex + j - lineByte];
-                    upleft = rawData[rawDataIndex + j - lineByte - pixelByte];
+                    upleft = rawData[rawDataIndex + j - pixelByte - lineByte];
                 }
                 else if (j >= pixelByte) {
                     left = rawData[rawDataIndex + j - pixelByte];
                 }
-                else if (rawDataIndex >= lineByte) {
+                else if (dataIndex >= lineByte) {
                     up = rawData[rawDataIndex + j - lineByte];
                 }
                 data[dataIndex + j] = rawData[rawDataIndex + j] - calcPaeth(left, up, upleft);
@@ -170,21 +192,48 @@ export function deflateFilter(rawData, width, height, bitDepth, colorType) {
     }
     return data;
 }
+export function calcPixelPropsLen(colorType) {
+    let result = 0;
+    if (COLOR_TYPE.GRAY === colorType) {
+        // GrayScale
+        result = 1;
+    }
+    else if (COLOR_TYPE.RGB === colorType) {
+        // RGB
+        result = 3;
+    }
+    else if (COLOR_TYPE.INDEX === colorType) {
+        // Index
+        result = 1;
+    }
+    else if (COLOR_TYPE.GRAY_ALPHA === colorType) {
+        // GrayScale Alpha
+        result = 2;
+    }
+    else if (COLOR_TYPE.RGBA === colorType) {
+        // RGBA
+        result = 4;
+    }
+    else {
+        throw new Error('Unknown colorType');
+    }
+    return result;
+}
 export function calcPixelByte(colorType, bitDepth) {
     let result = 0;
-    if (0 === colorType) {
+    if (COLOR_TYPE.GRAY === colorType) {
         result = bitDepth / 8;
     }
-    else if (2 === colorType) {
+    else if (COLOR_TYPE.RGB === colorType) {
         result = bitDepth / 8 * 3;
     }
-    else if (3 === colorType) {
-        throw new Error('IndexColor does not support');
+    else if (COLOR_TYPE.INDEX === colorType) {
+        result = 4;
     }
-    else if (4 === colorType) {
+    else if (COLOR_TYPE.GRAY_ALPHA === colorType) {
         result = bitDepth / 8 * 2;
     }
-    else if (6 === colorType) {
+    else if (COLOR_TYPE.RGBA === colorType) {
         result = bitDepth / 8 * 4;
     }
     else {

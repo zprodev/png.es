@@ -1,15 +1,11 @@
-export interface RGBA {
-    r?: number;
-    g?: number;
-    b?: number;
-    a?: number;
-}
+export { COLOR_TYPE } from './const';
 export declare class PNG {
     private _data;
     private _width;
     private _height;
     private _bitDepth;
     private _colorType;
+    private _pixelPropsNum;
     constructor(width: number, height: number, colorType?: number, bitDepth?: number);
     readonly data: Uint8Array;
     readonly width: number;
@@ -17,8 +13,8 @@ export declare class PNG {
     readonly colorType: number;
     readonly bitDepth: number;
     setData(data: Uint8Array): void;
-    getPixel(x: number, y: number): RGBA;
-    setPixel(x: number, y: number, rgba: RGBA): void;
+    getPixel(x: number, y: number): number[];
+    setPixel(x: number, y: number, pixelData: number[]): void;
 }
 export declare function parse(input: Uint8Array, oprion?: {
     inflate?: (data: Uint8Array) => Uint8Array;

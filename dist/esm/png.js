@@ -34,10 +34,9 @@ function startsWith(base, target, baseIndex = 0) {
     }
     return true;
 }
-function copy(base, target, targetOffset = 0) {
-    const baseLength = base.length;
-    for (let i = 0; i < baseLength; i++) {
-        target[targetOffset + i] = base[i];
+function copy(base, baseOffset, target, targetOffset, length) {
+    for (let i = 0; i < length; i++) {
+        target[targetOffset + i] = base[baseOffset + i];
     }
 }
 function readString(target, offset, length) {
@@ -70,6 +69,13 @@ function writeUInt32BE(value, target, offset) {
     target[offset + 1] = (value >>> 16);
     target[offset + 2] = (value >>> 8);
     target[offset + 3] = (value & 0xff);
+}
+function readBits(target, offset, length) {
+    const byteOffset = (offset / 8) | 0;
+    const bitOffset = offset % 8;
+    const bitOffsetFilter = 255 & (255 >>> bitOffset);
+    // MEMO: length never crosses a byte boundary
+    return (target[byteOffset] & bitOffsetFilter) >>> (8 - bitOffset - length);
 }
 
 const SIGNATURE = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -107,15 +113,15 @@ function packChunk(chunks) {
     });
     const packData = new Uint8Array(length);
     let packDataIndex = 0;
-    copy(SIGNATURE, packData, packDataIndex);
+    copy(SIGNATURE, 0, packData, packDataIndex, SIGNATURE.length);
     packDataIndex += SIGNATURE.length;
     chunks.forEach((chunk) => {
         writeUInt32BE(chunk.data.length, packData, packDataIndex);
         packDataIndex += 4;
         const array = convertCodes(chunk.type);
-        copy(array, packData, packDataIndex);
+        copy(array, 0, packData, packDataIndex, array.length);
         packDataIndex += 4;
-        copy(chunk.data, packData, packDataIndex);
+        copy(chunk.data, 0, packData, packDataIndex, chunk.data.length);
         packDataIndex += chunk.data.length;
         const crc = calcCrc32(packData, packDataIndex - 4 - chunk.data.length, packDataIndex);
         writeUInt32BE(crc, packData, packDataIndex);
@@ -140,83 +146,112 @@ const FILTER_TYPE = Object.freeze({
     AVERAGE: 3,
     PAETH: 4,
 });
+const COLOR_TYPE = Object.freeze({
+    GRAY: 0,
+    RGB: 2,
+    INDEX: 3,
+    GRAY_ALPHA: 4,
+    RGBA: 6,
+});
 
-function inflateFilter(data, width, height, bitDepth, colorType) {
-    if (bitDepth !== 8) {
-        throw new Error('Only bit depth 8 is supported');
-    }
-    const pixelByte = calcPixelByte(colorType, bitDepth);
-    const lineByte = pixelByte * width;
-    const pixelData = new Uint8Array(width * height * pixelByte);
+function inflateFilter(data, width, height, bitDepth, colorType, palette, transparency) {
+    const pixelPropsNum = calcPixelPropsLen(colorType);
+    const linePropsNum = pixelPropsNum * width;
+    const pixelBitLen = pixelPropsNum * bitDepth;
+    const lineBitLen = pixelBitLen * width;
+    const resultPixelByte = calcPixelByte(colorType, bitDepth);
+    const resultLineByte = resultPixelByte * width;
+    const result = new Uint8Array(width * height * resultPixelByte);
     let dataIndex = 0;
-    let pixelDataIndex = 0;
+    let resultIndex = 0;
     let left = 0;
     let up = 0;
     let upleft = 0;
-    for (let i = 0; i < height; i++) {
-        const filterType = readUint8(data, dataIndex);
-        dataIndex++;
+    for (let y = 0; y < height; ++y) {
+        const filterType = readBits(data, dataIndex, 8);
+        dataIndex = dataIndex + 8;
         if (FILTER_TYPE.NONE === filterType) {
-            for (let j = 0; j < lineByte; j++) {
-                pixelData[pixelDataIndex + j] = data[dataIndex + j];
+            for (let x = 0; x < linePropsNum; ++x) {
+                const value = readBits(data, dataIndex + x * bitDepth, bitDepth);
+                // TODO: 効率化
+                if (palette !== undefined && colorType === COLOR_TYPE.INDEX) {
+                    copy(palette, value * 3, result, resultIndex + x * 4, 3);
+                    if (transparency !== undefined && transparency[value] !== undefined) {
+                        result[resultIndex + x * 4 + 3] = transparency[value];
+                    }
+                    else {
+                        result[resultIndex + x * 4 + 3] = 255;
+                    }
+                }
+                else {
+                    result[resultIndex + x] = value;
+                }
             }
         }
         else if (FILTER_TYPE.SUB === filterType) {
-            for (let j = 0; j < lineByte; j++) {
-                if (j < pixelByte) {
-                    pixelData[pixelDataIndex + j] = data[dataIndex + j];
+            for (let x = 0; x < linePropsNum; ++x) {
+                if (x < pixelPropsNum) {
+                    result[resultIndex + x] = readBits(data, dataIndex + x * bitDepth, bitDepth);
                 }
                 else {
-                    pixelData[pixelDataIndex + j] = (pixelData[pixelDataIndex + j - pixelByte] + data[dataIndex + j]) % 256;
+                    result[resultIndex + x] =
+                        (result[resultIndex + x - pixelPropsNum] + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
                 }
             }
         }
         else if (FILTER_TYPE.UP === filterType) {
-            for (let j = 0; j < lineByte; j++) {
-                if (pixelDataIndex < lineByte) {
-                    pixelData[pixelDataIndex + j] = data[dataIndex + j];
+            for (let x = 0; x < linePropsNum; x++) {
+                if (resultIndex < linePropsNum) {
+                    result[resultIndex + x] = readBits(data, dataIndex + x * bitDepth, bitDepth);
                 }
                 else {
-                    pixelData[pixelDataIndex + j] = (pixelData[pixelDataIndex + j - lineByte] + data[dataIndex + j]) % 256;
+                    result[resultIndex + x] =
+                        (result[resultIndex + x - linePropsNum] + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
                 }
             }
         }
         else if (FILTER_TYPE.AVERAGE === filterType) {
-            for (let j = 0; j < lineByte; j++) {
+            for (let x = 0; x < linePropsNum; x++) {
                 left = up = 0;
-                if (j >= pixelByte) {
-                    left = pixelData[pixelDataIndex + j - pixelByte];
+                if (x >= pixelPropsNum) {
+                    left = result[resultIndex + x - pixelPropsNum];
                 }
-                if (pixelDataIndex >= lineByte) {
-                    up = pixelData[pixelDataIndex + j - lineByte];
+                if (resultIndex >= linePropsNum) {
+                    up = result[resultIndex + x - linePropsNum];
                 }
-                pixelData[pixelDataIndex + j] = ((left + up) / 2 + data[dataIndex + j]) % 256;
+                result[resultIndex + x] = ((left + up) / 2 + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
             }
         }
         else if (FILTER_TYPE.PAETH === filterType) {
-            for (let j = 0; j < lineByte; j++) {
+            for (let x = 0; x < linePropsNum; x++) {
                 left = up = upleft = 0;
-                if (j >= pixelByte && pixelDataIndex >= lineByte) {
-                    left = pixelData[pixelDataIndex + j - pixelByte];
-                    up = pixelData[pixelDataIndex + j - lineByte];
-                    upleft = pixelData[pixelDataIndex + j - lineByte - pixelByte];
+                if (x >= pixelPropsNum && resultIndex >= linePropsNum) {
+                    left = result[resultIndex + x - pixelPropsNum];
+                    up = result[resultIndex + x - linePropsNum];
+                    upleft = result[resultIndex + x - pixelPropsNum - linePropsNum];
                 }
-                else if (j >= pixelByte) {
-                    left = pixelData[pixelDataIndex + j - pixelByte];
+                else if (x >= pixelPropsNum) {
+                    left = result[resultIndex + x - pixelPropsNum];
                 }
-                else if (pixelDataIndex >= lineByte) {
-                    up = pixelData[pixelDataIndex + j - lineByte];
+                else if (resultIndex >= linePropsNum) {
+                    up = result[resultIndex + x - linePropsNum];
                 }
-                pixelData[pixelDataIndex + j] = (calcPaeth(left, up, upleft) + data[dataIndex + j]) % 256;
+                result[resultIndex + x] =
+                    (calcPaeth(left, up, upleft) + readBits(data, dataIndex + x * bitDepth, bitDepth)) % 256;
             }
         }
         else {
             throw new Error('Unknown filter');
         }
-        dataIndex += lineByte;
-        pixelDataIndex += lineByte;
+        if (lineBitLen % 8 === 0) {
+            dataIndex += lineBitLen;
+        }
+        else {
+            dataIndex += lineBitLen + (8 - lineBitLen % 8);
+        }
+        resultIndex += resultLineByte;
     }
-    return pixelData;
+    return result;
 }
 function deflateFilter(rawData, width, height, bitDepth, colorType) {
     const pixelByte = calcPixelByte(colorType, bitDepth);
@@ -283,7 +318,7 @@ function deflateFilter(rawData, width, height, bitDepth, colorType) {
                 if (j >= pixelByte) {
                     left = rawData[rawDataIndex + j - pixelByte];
                 }
-                if (rawDataIndex >= lineByte) {
+                if (dataIndex >= lineByte) {
                     up = rawData[rawDataIndex + j - lineByte];
                 }
                 data[dataIndex + j] = rawData[rawDataIndex + j] - (((left + up) / 2) | 0);
@@ -292,15 +327,15 @@ function deflateFilter(rawData, width, height, bitDepth, colorType) {
         else if (FILTER_TYPE.PAETH === filterType) {
             for (let j = 0; j < lineByte; j++) {
                 left = up = upleft = 0;
-                if (j >= pixelByte && rawDataIndex >= lineByte) {
+                if (j >= pixelByte && dataIndex >= lineByte) {
                     left = rawData[rawDataIndex + j - pixelByte];
                     up = rawData[rawDataIndex + j - lineByte];
-                    upleft = rawData[rawDataIndex + j - lineByte - pixelByte];
+                    upleft = rawData[rawDataIndex + j - pixelByte - lineByte];
                 }
                 else if (j >= pixelByte) {
                     left = rawData[rawDataIndex + j - pixelByte];
                 }
-                else if (rawDataIndex >= lineByte) {
+                else if (dataIndex >= lineByte) {
                     up = rawData[rawDataIndex + j - lineByte];
                 }
                 data[dataIndex + j] = rawData[rawDataIndex + j] - calcPaeth(left, up, upleft);
@@ -311,21 +346,48 @@ function deflateFilter(rawData, width, height, bitDepth, colorType) {
     }
     return data;
 }
+function calcPixelPropsLen(colorType) {
+    let result = 0;
+    if (COLOR_TYPE.GRAY === colorType) {
+        // GrayScale
+        result = 1;
+    }
+    else if (COLOR_TYPE.RGB === colorType) {
+        // RGB
+        result = 3;
+    }
+    else if (COLOR_TYPE.INDEX === colorType) {
+        // Index
+        result = 1;
+    }
+    else if (COLOR_TYPE.GRAY_ALPHA === colorType) {
+        // GrayScale Alpha
+        result = 2;
+    }
+    else if (COLOR_TYPE.RGBA === colorType) {
+        // RGBA
+        result = 4;
+    }
+    else {
+        throw new Error('Unknown colorType');
+    }
+    return result;
+}
 function calcPixelByte(colorType, bitDepth) {
     let result = 0;
-    if (0 === colorType) {
+    if (COLOR_TYPE.GRAY === colorType) {
         result = bitDepth / 8;
     }
-    else if (2 === colorType) {
+    else if (COLOR_TYPE.RGB === colorType) {
         result = bitDepth / 8 * 3;
     }
-    else if (3 === colorType) {
-        throw new Error('IndexColor does not support');
+    else if (COLOR_TYPE.INDEX === colorType) {
+        result = 4;
     }
-    else if (4 === colorType) {
+    else if (COLOR_TYPE.GRAY_ALPHA === colorType) {
         result = bitDepth / 8 * 2;
     }
-    else if (6 === colorType) {
+    else if (COLOR_TYPE.RGBA === colorType) {
         result = bitDepth / 8 * 4;
     }
     else {
@@ -445,14 +507,20 @@ function calcExpectedValuePaeth(input, offset, length, pixelByte) {
 }
 
 class PNG {
-    //  public compressionMethod = 0;
-    //  public filterMethod = 0;
-    //  public interlaceMethod = 0;
     constructor(width, height, colorType = 6, bitDepth = 8) {
+        //  public compressionMethod = 0;
+        //  public filterMethod = 0;
+        //  public interlaceMethod = 0;
+        this._pixelPropsNum = 0;
+        // TODO: Add support IndexedColor
+        if (colorType === COLOR_TYPE.INDEX) {
+            throw new Error('Not support IndexedColor');
+        }
         this._width = width;
         this._height = height;
         this._colorType = colorType;
         this._bitDepth = bitDepth;
+        this._pixelPropsNum = calcPixelPropsLen(colorType);
         const pixelByte = calcPixelByte(colorType, bitDepth);
         this._data = new Uint8Array(width * height * pixelByte);
     }
@@ -481,29 +549,22 @@ class PNG {
         }
     }
     getPixel(x, y) {
-        const index = (x + this._width * y) * 4;
+        const pixelData = [];
+        const index = ((x - 1) + this._width * (y - 1)) * this._pixelPropsNum;
         const data = this._data;
-        return {
-            r: data[index],
-            g: data[index + 1],
-            b: data[index + 2],
-            a: data[index + 3],
-        };
+        for (let i = index, iEnd = index + this._pixelPropsNum; i < iEnd; i++) {
+            pixelData.push(data[i]);
+        }
+        return pixelData;
     }
-    setPixel(x, y, rgba) {
-        const index = (x + this._width * y) * 4;
+    setPixel(x, y, pixelData) {
+        if (pixelData.length !== this._pixelPropsNum) {
+            throw new Error('Don\'t match pixelData size');
+        }
+        const index = ((x - 1) + this._width * (y - 1)) * this._pixelPropsNum;
         const data = this._data;
-        if (rgba.r !== undefined) {
-            data[index] = rgba.r;
-        }
-        if (rgba.g !== undefined) {
-            data[index + 1] = rgba.g;
-        }
-        if (rgba.b !== undefined) {
-            data[index + 2] = rgba.b;
-        }
-        if (rgba.a !== undefined) {
-            data[index + 3] = rgba.a;
+        for (let i = 0; i < this._pixelPropsNum; i++) {
+            data[i + index] = pixelData[i];
         }
     }
 }
@@ -527,11 +588,21 @@ function parse(input, oprion) {
         throw new Error('Interlace does not support');
     }
     const idat = chunks.get('IDAT');
+    const palette = (chunks.has('PLTE')) ? chunks.get('PLTE').data : undefined;
+    const transparency = (chunks.has('tRNS')) ? chunks.get('tRNS').data : undefined;
     const rawData = (oprion && oprion.inflate) ? oprion.inflate(idat.data) : inflate(idat.data);
-    const pixelData = inflateFilter(rawData, width, height, bitDepth, colorType);
-    const png = new PNG(width, height, colorType, bitDepth);
-    png.setData(pixelData);
-    return png;
+    const pixelData = inflateFilter(rawData, width, height, bitDepth, colorType, palette, transparency);
+    // TODO: Add support IndexedColor
+    if (colorType === COLOR_TYPE.INDEX) {
+        const png = new PNG(width, height);
+        png.setData(pixelData);
+        return png;
+    }
+    else {
+        const png = new PNG(width, height, colorType, bitDepth);
+        png.setData(pixelData);
+        return png;
+    }
 }
 function pack(png, oprion) {
     const chunks = new Map();
@@ -557,4 +628,4 @@ function pack(png, oprion) {
     return packData;
 }
 
-export { PNG, parse, pack };
+export { PNG, parse, pack, COLOR_TYPE };
