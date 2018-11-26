@@ -35,33 +35,58 @@ const GRAY_SCALE_A_PNG_DATA = fs.readFileSync(path.join(__dirname, 'png', 'ga.pn
 
 describe('parse', function() {
   it('RGBA', function() {
+    const png = pnges.parse(RGBA_PNG_DATA);
     assert.deepEqual(
       RGBA,
-      pnges.parse(RGBA_PNG_DATA).data
+      png.data
+    );
+    assert.deepEqual(
+      4,
+      png.pixelLength
     );
   });
   it('RGB', function() {
+    const png = pnges.parse(RGB_PNG_DATA);
     assert.deepEqual(
       RGB,
-      pnges.parse(RGB_PNG_DATA).data
+      png.data
+    );
+    assert.deepEqual(
+      3,
+      png.pixelLength
     );
   });
   it('Index', function() {
+    const png = pnges.parse(INDEX_PNG_DATA);
     assert.deepEqual(
       RGBA,
-      pnges.parse(INDEX_PNG_DATA).data
+      png.data
+    );
+    assert.deepEqual(
+      4,
+      png.pixelLength
     );
   });
   it('GrayScale', function() {
+    const png = pnges.parse(GRAY_SCALE_PNG_DATA);
     assert.deepEqual(
       GRAY_SCALE,
-      pnges.parse(GRAY_SCALE_PNG_DATA).data
+      png.data
+    );
+    assert.deepEqual(
+      1,
+      png.pixelLength
     );
   });
   it('GrayScale Alpha', function() {
+    const png = pnges.parse(GRAY_SCALE_A_PNG_DATA);
     assert.deepEqual(
       GRAY_SCALE_A,
-      pnges.parse(GRAY_SCALE_A_PNG_DATA).data
+      png.data
+    );
+    assert.deepEqual(
+      2,
+      png.pixelLength
     );
   });
 });

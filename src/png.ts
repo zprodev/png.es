@@ -48,6 +48,9 @@ export class PNG {
   get bitDepth() {
     return this._bitDepth;
   }
+  get pixelLength() {
+    return this._pixelPropsNum;
+  }
 
   public setData(data: Uint8Array) {
     if (this._data.length !== data.length) {

@@ -1490,6 +1490,9 @@ var pnges = (function (exports) {
         get bitDepth() {
             return this._bitDepth;
         }
+        get pixelLength() {
+            return this._pixelPropsNum;
+        }
         setData(data) {
             if (this._data.length !== data.length) {
                 throw new Error('Data size does not match');

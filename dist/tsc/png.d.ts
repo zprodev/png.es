@@ -12,6 +12,7 @@ export declare class PNG {
     readonly height: number;
     readonly colorType: number;
     readonly bitDepth: number;
+    readonly pixelLength: number;
     setData(data: Uint8Array): void;
     getPixel(x: number, y: number): number[];
     setPixel(x: number, y: number, pixelData: number[]): void;
