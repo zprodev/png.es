@@ -1,3 +1,8 @@
+/**
+ * @license Copyright (c) 2018 zprodev
+ * https://github.com/zprodev/png.es
+ */
+
 import {deflate, inflate} from 'zlib.es';
 import {Chunk, packChunk, parseChunk} from './chunk';
 import {COLOR_TYPE} from './const';

@@ -8,6 +8,10 @@ if(process.env.BROWSER){
     format: 'iife',
     name: 'pnges'
   });
+  output.push({
+    file: 'dist/esm/png.js',
+    format: 'es',
+  });
   plugins.push(
     resolve()
   );
@@ -15,10 +19,6 @@ if(process.env.BROWSER){
   output.push({
     file: 'dist/cjs/png.js',
     format: 'cjs',
-  });
-  output.push({
-    file: 'dist/esm/png.js',
-    format: 'es',
   });
 }
 

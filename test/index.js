@@ -127,7 +127,7 @@ describe('pack', function() {
   });
 });
 
-describe('re pack', function() {
+describe('edit', function() {
   it('RGBA', function() {
     const png = pnges.parse(RGBA_PNG_DATA);
     const packData = pnges.pack(png);

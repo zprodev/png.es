@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "ECMAScript compliant lightweight PNG editor",
   "main": "dist/cjs/png.js",
-  "module": "dist/esm/png.js",
+  "module": "dist/tsc/png.js",
   "types": "dist/tsc/png.d.ts",
   "dependencies": {
     "zlib.es": "0.5.1"
@@ -18,12 +18,13 @@
   },
   "scripts": {
     "test": "mocha ./test/index.js",
-    "build": "npm run lint && npm run build:tsc && npm run build:rollup:module && npm run build:rollup:browser && npm run build:uglify && npm run test",
+    "build": "npm run lint && npm run build:tsc && npm run build:rollup:module && npm run build:rollup:browser && npm run build:uglify:browser && npm run build:uglify:esm && npm run test",
     "dev": "npm run build:tsc && npm run build:rollup:module && npm run test",
     "build:tsc": "tsc",
     "build:rollup:module": "rollup -c",
     "build:rollup:browser": "rollup -c --environment BROWSER",
-    "build:uglify": "uglifyjs dist/browser/png.js -o dist/browser/png.min.js -cm --source-map",
+    "build:uglify:browser": "uglifyjs dist/browser/png.js -o dist/browser/png.min.js -cm --comments --source-map",
+    "build:uglify:esm": "uglifyjs dist/esm/png.js -o dist/esm/png.min.js -cm --comments --source-map",
     "lint": "tslint --fix './src/**/*.ts'"
   },
   "repository": {
