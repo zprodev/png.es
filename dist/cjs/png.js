@@ -510,6 +510,10 @@ function calcExpectedValuePaeth(input, offset, length, pixelByte) {
     return expectedValue;
 }
 
+/**
+ * @license Copyright (c) 2018 zprodev
+ * https://github.com/zprodev/png.es
+ */
 class PNG {
     constructor(width, height, colorType = 6, bitDepth = 8) {
         //  public compressionMethod = 0;
@@ -630,6 +634,10 @@ function pack(png, oprion) {
     chunks.set('IDAT', {
         type: 'IDAT',
         data: idatData,
+    });
+    chunks.set('IEND', {
+        type: 'IEND',
+        data: new Uint8Array(0),
     });
     const packData = packChunk(chunks);
     return packData;

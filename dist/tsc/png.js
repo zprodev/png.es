@@ -1,3 +1,7 @@
+/**
+ * @license Copyright (c) 2018 zprodev
+ * https://github.com/zprodev/png.es
+ */
 import { deflate, inflate } from 'zlib.es';
 import { packChunk, parseChunk } from './chunk';
 import { COLOR_TYPE } from './const';
@@ -124,6 +128,10 @@ export function pack(png, oprion) {
     chunks.set('IDAT', {
         type: 'IDAT',
         data: idatData,
+    });
+    chunks.set('IEND', {
+        type: 'IEND',
+        data: new Uint8Array(0),
     });
     const packData = packChunk(chunks);
     return packData;

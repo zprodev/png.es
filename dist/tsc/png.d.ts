@@ -1,3 +1,7 @@
+/**
+ * @license Copyright (c) 2018 zprodev
+ * https://github.com/zprodev/png.es
+ */
 export { COLOR_TYPE } from './const';
 export declare class PNG {
     private _data;
