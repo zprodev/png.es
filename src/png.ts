@@ -146,6 +146,11 @@ export function pack(png: PNG, oprion?: {deflate?: (data: Uint8Array) => Uint8Ar
     data: idatData,
   });
 
+  chunks.set('IEND', {
+    type: 'IEND',
+    data: new Uint8Array(0),
+  });
+
   const packData = packChunk(chunks);
   return packData;
 }
