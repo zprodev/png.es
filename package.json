@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "mocha": "^5.2.0",
-    "rollup": "^0.66.6",
+    "rollup": "^1.13.1",
     "rollup-plugin-node-resolve": "^3.4.0",
     "tslint": "^5.11.0",
     "typescript": "^3.1.3",
