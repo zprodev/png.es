@@ -6,7 +6,7 @@
   "module": "dist/tsc/png.js",
   "types": "dist/tsc/png.d.ts",
   "dependencies": {
-    "zlib.es": "0.5.1"
+    "zlib.es": "0.6.0"
   },
   "devDependencies": {
     "mocha": "^5.2.0",
