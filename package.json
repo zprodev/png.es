@@ -9,7 +9,7 @@
     "zlib.es": "0.6.0"
   },
   "devDependencies": {
-    "mocha": "^6.1.4",
+    "mocha": "^8.1.2",
     "rollup": "^1.13.1",
     "rollup-plugin-node-resolve": "^5.0.1",
     "tslint": "^5.11.0",
